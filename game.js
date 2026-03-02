@@ -429,6 +429,10 @@ function destroyNeighbors(c, r) {
             }
         }
     });
+
+    if (checkAllBricksCleared()) {
+        handleWin();
+    }
 }
 
 function spawnCoin(x, y, type = 'normal') {
@@ -989,6 +993,10 @@ function explodeRocket(ex, ey) {
                 b.rotation += (Math.random() - 0.5) * 1.5;
             }
         }
+    }
+
+    if (checkAllBricksCleared()) {
+        handleWin();
     }
 }
 
