@@ -103,6 +103,32 @@ canvas {
     text-shadow: 0 0 5px var(--neon-yellow);
 }
 
+.shop-btn {
+    background: transparent;
+    color: var(--neon-gold);
+    border: 1px solid var(--neon-gold);
+    padding: 5px 10px;
+    font-family: inherit;
+    font-size: 14px;
+    text-transform: uppercase;
+    cursor: pointer;
+    box-shadow: 0 0 3px var(--neon-gold);
+    transition: all 0.2s;
+}
+
+.shop-btn:hover:not(:disabled) {
+    background: var(--neon-gold);
+    color: black;
+    box-shadow: 0 0 10px var(--neon-gold);
+}
+
+.shop-btn:disabled {
+    color: #444;
+    border-color: #444;
+    box-shadow: none;
+    cursor: not-allowed;
+}
+
 @keyframes flicker {
 
     0%,

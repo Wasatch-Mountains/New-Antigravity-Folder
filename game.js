@@ -6,6 +6,7 @@ const coinsEl = document.getElementById('coins');
 const levelEl = document.getElementById('level');
 const overlay = document.getElementById('ui-overlay');
 const startBtn = document.getElementById('startBtn');
+const buyBallBtn = document.getElementById('buyBallBtn');
 const msgTitle = document.getElementById('msg-title');
 
 // Audio Setup
@@ -67,6 +68,26 @@ function playCoinSound() {
     osc.stop(audioCtx.currentTime + 0.2);
 }
 
+function playPaddleSound() {
+    if (!audioCtx) return;
+
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.1);
+
+    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.1);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.1);
+}
+
 // Game Constants
 const BALL_RADIUS = 10;
 const COIN_RADIUS = 15;
@@ -90,14 +111,17 @@ let gameState = 'START'; // START, PLAYING, GAME_OVER, WIN
 
 let comboTimestamps = [];
 let activeCoins = [];
+let balls = [];
 
-let ball = {
-    x: canvas.width / 2,
-    y: canvas.height - 30,
-    dx: 4,
-    dy: -4,
-    color: '#fff'
-};
+function createBall(x, y, dx, dy) {
+    return {
+        x: x || canvas.width / 2,
+        y: y || canvas.height - 30,
+        dx: dx || 4,
+        dy: dy || -4,
+        color: '#fff'
+    };
+}
 
 let paddle = {
     x: (canvas.width - PADDLE_WIDTH) / 2,
@@ -158,28 +182,30 @@ function collisionDetection() {
                 const bw = (canvas.width - BRICK_OFFSET_LEFT * 2) / BRICK_COLS - BRICK_PADDING;
                 const bh = PADDLE_HEIGHT;
 
-                if (ball.x > brickX && ball.x < brickX + bw && ball.y > brickY && ball.y < brickY + bh) {
-                    ball.dy = -ball.dy;
-                    b.status = 0;
-                    score += 10;
-                    updateStats();
-                    playBrickSound(b.color);
+                balls.forEach(ball => {
+                    if (ball.x > brickX && ball.x < brickX + bw && ball.y > brickY && ball.y < brickY + bh) {
+                        ball.dy = -ball.dy;
+                        b.status = 0;
+                        score += 10;
+                        updateStats();
+                        playBrickSound(b.color);
 
-                    // Combo Detection
-                    const now = Date.now();
-                    comboTimestamps.push(now);
-                    // Only keep timestamps within the window
-                    comboTimestamps = comboTimestamps.filter(t => now - t < COMBO_WINDOW);
+                        // Combo Detection
+                        const now = Date.now();
+                        comboTimestamps.push(now);
+                        // Only keep timestamps within the window
+                        comboTimestamps = comboTimestamps.filter(t => now - t < COMBO_WINDOW);
 
-                    if (comboTimestamps.length >= 3) {
-                        spawnCoin(brickX + bw / 2, brickY + bh / 2);
-                        comboTimestamps = []; // Reset combo after spawn
+                        if (comboTimestamps.length >= 3) {
+                            spawnCoin(brickX + bw / 2, brickY + bh / 2);
+                            comboTimestamps = []; // Reset combo after spawn
+                        }
                     }
+                });
 
-                    // Check for win
-                    if (checkAllBricksCleared()) {
-                        handleWin();
-                    }
+                // Check for win
+                if (b.status === 0 && checkAllBricksCleared()) {
+                    handleWin();
                 }
             }
         }
@@ -227,18 +253,23 @@ function updateStats() {
     livesEl.textContent = lives;
     coinsEl.textContent = coins;
     levelEl.textContent = level;
+
+    // Shop Logic
+    buyBallBtn.disabled = coins < 10;
 }
 
 // Drawing Functions
-function drawBall() {
-    ctx.beginPath();
-    ctx.arc(ball.x, ball.y, BALL_RADIUS, 0, Math.PI * 2);
-    ctx.fillStyle = ball.color;
-    ctx.shadowBlur = 15;
-    ctx.shadowColor = '#fff';
-    ctx.fill();
-    ctx.closePath();
-    ctx.shadowBlur = 0;
+function drawBalls() {
+    balls.forEach(ball => {
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, BALL_RADIUS, 0, Math.PI * 2);
+        ctx.fillStyle = ball.color;
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#fff';
+        ctx.fill();
+        ctx.closePath();
+        ctx.shadowBlur = 0;
+    });
 }
 
 function drawPaddle() {
@@ -307,33 +338,41 @@ function update() {
         paddle.x -= 7;
     }
 
-    // Move ball
-    ball.x += ball.dx;
-    ball.y += ball.dy;
+    // Move balls
+    for (let i = balls.length - 1; i >= 0; i--) {
+        const ball = balls[i];
+        ball.x += ball.dx;
+        ball.y += ball.dy;
 
-    // Wall collision (Left/Right)
-    if (ball.x + ball.dx > canvas.width - BALL_RADIUS || ball.x + ball.dx < BALL_RADIUS) {
-        ball.dx = -ball.dx;
-    }
+        // Wall collision (Left/Right)
+        if (ball.x + ball.dx > canvas.width - BALL_RADIUS || ball.x + ball.dx < BALL_RADIUS) {
+            ball.dx = -ball.dx;
+        }
 
-    // Wall collision (Top)
-    if (ball.y + ball.dy < BALL_RADIUS) {
-        ball.dy = -ball.dy;
-    } else if (ball.y + ball.dy > canvas.height - BALL_RADIUS - 10) {
-        // Paddle collision
-        if (ball.x > paddle.x && ball.x < paddle.x + paddle.width) {
+        // Wall collision (Top)
+        if (ball.y + ball.dy < BALL_RADIUS) {
             ball.dy = -ball.dy;
-            // Add some velocity change based on where it hit the paddle
-            let hitPos = (ball.x - (paddle.x + paddle.width / 2)) / (paddle.width / 2);
-            ball.dx = hitPos * 5;
-        } else if (ball.y > canvas.height) {
-            // Out of bounds
-            lives--;
-            updateStats();
-            if (!lives) {
-                handleGameOver();
-            } else {
-                resetBall();
+        } else if (ball.y + ball.dy > canvas.height - BALL_RADIUS - 10) {
+            // Paddle collision
+            if (ball.x > paddle.x && ball.x < paddle.x + paddle.width) {
+                ball.dy = -ball.dy;
+                playPaddleSound();
+                // Add some velocity change based on where it hit the paddle
+                let hitPos = (ball.x - (paddle.x + paddle.width / 2)) / (paddle.width / 2);
+                ball.dx = hitPos * 5;
+            } else if (ball.y > canvas.height + BALL_RADIUS) {
+                // Out of bounds
+                balls.splice(i, 1);
+
+                if (balls.length === 0) {
+                    lives--;
+                    updateStats();
+                    if (!lives) {
+                        handleGameOver();
+                    } else {
+                        resetBall();
+                    }
+                }
             }
         }
     }
@@ -345,7 +384,7 @@ function update() {
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawBricks();
-    drawBall();
+    drawBalls();
     drawPaddle();
     drawCoins();
 }
@@ -388,25 +427,42 @@ function handleWin() {
     startBtn.textContent = 'Next Level';
     overlay.classList.add('active');
 
-    // Speed up
-    ball.dx *= 1.1;
-    ball.dy *= 1.1;
-
     resetBall();
     initBricks();
 }
 
 function resetBall() {
-    ball.x = canvas.width / 2;
-    ball.y = canvas.height - 30;
-    ball.dx = 4 * (Math.random() > 0.5 ? 1 : -1);
-    ball.dy = -4;
+    balls = [createBall()];
     paddle.x = (canvas.width - paddle.width) / 2;
+    activeCoins = [];
+    comboTimestamps = [];
 }
 
+function buyDoubleBall() {
+    if (coins >= 10) {
+        coins -= 10;
+        updateStats();
+
+        const currentBalls = [...balls];
+        currentBalls.forEach(b => {
+            // Create a new ball at the same position but with a different angle
+            const angle = Math.atan2(b.dy, b.dx) + (Math.random() * 0.4 - 0.2);
+            const speed = Math.sqrt(b.dx * b.dx + b.dy * b.dy);
+            const newDx = Math.cos(angle) * speed;
+            const newDy = Math.sin(angle) * speed;
+
+            balls.push(createBall(b.x, b.y, newDx, newDy));
+        });
+
+        playCoinSound(); // Re-use coin sound for purchase
+    }
+}
+
+buyBallBtn.addEventListener('click', buyDoubleBall);
 startBtn.addEventListener('click', startGame);
 
 // Init
 initBricks();
+resetBall();
 updateStats();
 loop();
