@@ -119,6 +119,25 @@ function playRadioactiveSound() {
     osc.stop(audioCtx.currentTime + 0.5);
 }
 
+function playSparkleSound() {
+    if (!audioCtx) return;
+
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1500 + Math.random() * 1000, audioCtx.currentTime);
+
+    gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.05);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.05);
+}
+
 // Game Constants
 const BALL_RADIUS = 10;
 const COIN_RADIUS = 15;
@@ -145,6 +164,9 @@ let activeCoins = [];
 let balls = [];
 let radioactiveTimer = 0;
 let isRadioactive = false;
+let activeParticles = [];
+let fadingBricks = [];
+let sparkleTimer = 0;
 
 function createBall(x, y, dx, dy) {
     return {
@@ -260,6 +282,18 @@ function destroyNeighbors(c, r) {
             if (nb.status === 1) {
                 nb.status = 0;
                 score += 5; // Reduced score for neighbors
+
+                // Add to fading bricks
+                const bw = (canvas.width - BRICK_OFFSET_LEFT * 2) / BRICK_COLS - BRICK_PADDING;
+                const bh = PADDLE_HEIGHT;
+                const bx = nc * (bw + BRICK_PADDING) + BRICK_OFFSET_LEFT;
+                const by = nr * (bh + BRICK_PADDING) + BRICK_OFFSET_TOP;
+
+                fadingBricks.push({
+                    x: bx, y: by, w: bw, h: bh,
+                    alpha: 1.0,
+                    life: 500 // 0.5s
+                });
             }
         }
     });
@@ -401,6 +435,14 @@ function update() {
 
     if (isRadioactive) {
         radioactiveTimer -= 16.67; // approx (1000/60)
+
+        // Periodic sparkle sound
+        sparkleTimer -= 16.67;
+        if (sparkleTimer <= 0) {
+            playSparkleSound();
+            sparkleTimer = 200 + Math.random() * 300;
+        }
+
         if (radioactiveTimer <= 0) {
             isRadioactive = false;
             radioactiveTimer = 0;
@@ -454,6 +496,24 @@ function update() {
         }
     }
 
+    // Update particles
+    for (let i = activeParticles.length - 1; i >= 0; i--) {
+        const p = activeParticles[i];
+        p.x += p.dx;
+        p.y += p.dy;
+        p.life -= 16.67;
+        p.alpha = p.life / 500;
+        if (p.life <= 0) activeParticles.splice(i, 1);
+    }
+
+    // Update fading bricks
+    for (let i = fadingBricks.length - 1; i >= 0; i--) {
+        const fb = fadingBricks[i];
+        fb.life -= 16.67;
+        fb.alpha = fb.life / 500;
+        if (fb.life <= 0) fadingBricks.splice(i, 1);
+    }
+
     updateCoins();
     collisionDetection();
 }
@@ -461,9 +521,34 @@ function update() {
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawBricks();
+    drawFadingBricks();
+    drawParticles();
     drawBalls();
     drawPaddle();
     drawCoins();
+}
+
+function drawFadingBricks() {
+    fadingBricks.forEach(fb => {
+        ctx.beginPath();
+        ctx.rect(fb.x, fb.y, fb.w, fb.h);
+        ctx.fillStyle = `rgba(57, 255, 20, ${fb.alpha})`;
+        ctx.shadowBlur = 10 * fb.alpha;
+        ctx.shadowColor = '#39ff14';
+        ctx.fill();
+        ctx.closePath();
+        ctx.shadowBlur = 0;
+    });
+}
+
+function drawParticles() {
+    activeParticles.forEach(p => {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(57, 255, 20, ${p.alpha})`;
+        ctx.fill();
+        ctx.closePath();
+    });
 }
 
 function loop() {
