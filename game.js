@@ -7,6 +7,7 @@ const levelEl = document.getElementById('level');
 const overlay = document.getElementById('ui-overlay');
 const startBtn = document.getElementById('startBtn');
 const buyBallBtn = document.getElementById('buyBallBtn');
+const buyRadioBtn = document.getElementById('buyRadioBtn');
 const msgTitle = document.getElementById('msg-title');
 
 // Audio Setup
@@ -88,6 +89,36 @@ function playPaddleSound() {
     osc.stop(audioCtx.currentTime + 0.1);
 }
 
+function playRadioactiveSound() {
+    if (!audioCtx) return;
+
+    const osc = audioCtx.createOscillator();
+    const lfo = audioCtx.createOscillator();
+    const lfoGain = audioCtx.createGain();
+    const gain = audioCtx.createGain();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(100, audioCtx.currentTime);
+
+    lfo.type = 'square';
+    lfo.frequency.setValueAtTime(20, audioCtx.currentTime);
+    lfoGain.gain.setValueAtTime(50, audioCtx.currentTime);
+
+    lfo.connect(lfoGain);
+    lfoGain.connect(osc.frequency);
+
+    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+    gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.5);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    lfo.start();
+    osc.start();
+    lfo.stop(audioCtx.currentTime + 0.5);
+    osc.stop(audioCtx.currentTime + 0.5);
+}
+
 // Game Constants
 const BALL_RADIUS = 10;
 const COIN_RADIUS = 15;
@@ -112,6 +143,8 @@ let gameState = 'START'; // START, PLAYING, GAME_OVER, WIN
 let comboTimestamps = [];
 let activeCoins = [];
 let balls = [];
+let radioactiveTimer = 0;
+let isRadioactive = false;
 
 function createBall(x, y, dx, dy) {
     return {
@@ -190,6 +223,10 @@ function collisionDetection() {
                         updateStats();
                         playBrickSound(b.color);
 
+                        if (isRadioactive) {
+                            destroyNeighbors(c, r);
+                        }
+
                         // Combo Detection
                         const now = Date.now();
                         comboTimestamps.push(now);
@@ -210,6 +247,22 @@ function collisionDetection() {
             }
         }
     }
+}
+
+function destroyNeighbors(c, r) {
+    const neighbors = [
+        [c - 1, r], [c + 1, r], [c, r - 1], [c, r + 1]
+    ];
+
+    neighbors.forEach(([nc, nr]) => {
+        if (nc >= 0 && nc < BRICK_COLS && nr >= 0 && nr < BRICK_ROWS) {
+            const nb = bricks[nc][nr];
+            if (nb.status === 1) {
+                nb.status = 0;
+                score += 5; // Reduced score for neighbors
+            }
+        }
+    });
 }
 
 function spawnCoin(x, y) {
@@ -256,6 +309,7 @@ function updateStats() {
 
     // Shop Logic
     buyBallBtn.disabled = coins < 10;
+    buyRadioBtn.disabled = coins < 5 || isRadioactive;
 }
 
 // Drawing Functions
@@ -263,9 +317,9 @@ function drawBalls() {
     balls.forEach(ball => {
         ctx.beginPath();
         ctx.arc(ball.x, ball.y, BALL_RADIUS, 0, Math.PI * 2);
-        ctx.fillStyle = ball.color;
+        ctx.fillStyle = isRadioactive ? '#39ff14' : ball.color;
         ctx.shadowBlur = 15;
-        ctx.shadowColor = '#fff';
+        ctx.shadowColor = isRadioactive ? '#39ff14' : '#fff';
         ctx.fill();
         ctx.closePath();
         ctx.shadowBlur = 0;
@@ -274,10 +328,24 @@ function drawBalls() {
 
 function drawPaddle() {
     ctx.beginPath();
-    ctx.rect(paddle.x, canvas.height - paddle.height - 10, paddle.width, paddle.height);
-    ctx.fillStyle = '#00f2ff';
+
+    // Rounded top paddle logic
+    const r = 10; // corner radius
+    const x = paddle.x;
+    const y = canvas.height - paddle.height - 10;
+    const w = paddle.width;
+    const h = paddle.height;
+
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r); // top-right
+    ctx.arcTo(x + w, y + h, x, y + h, 0); // bottom-right
+    ctx.arcTo(x, y + h, x, y, 0);       // bottom-left
+    ctx.arcTo(x, y, x + w, y, r);       // top-left
+    ctx.closePath();
+
+    ctx.fillStyle = isRadioactive ? '#39ff14' : '#00f2ff';
     ctx.shadowBlur = 10;
-    ctx.shadowColor = '#00f2ff';
+    ctx.shadowColor = isRadioactive ? '#39ff14' : '#00f2ff';
     ctx.fill();
     ctx.closePath();
     ctx.shadowBlur = 0;
@@ -330,6 +398,15 @@ function drawCoins() {
 // Game Loop
 function update() {
     if (gameState !== 'PLAYING') return;
+
+    if (isRadioactive) {
+        radioactiveTimer -= 16.67; // approx (1000/60)
+        if (radioactiveTimer <= 0) {
+            isRadioactive = false;
+            radioactiveTimer = 0;
+            updateStats();
+        }
+    }
 
     // Move paddle
     if (paddle.isMovingRight && paddle.x < canvas.width - paddle.width) {
@@ -458,7 +535,18 @@ function buyDoubleBall() {
     }
 }
 
+function buyRadioactivity() {
+    if (coins >= 5 && !isRadioactive) {
+        coins -= 5;
+        isRadioactive = true;
+        radioactiveTimer = 10000;
+        updateStats();
+        playRadioactiveSound();
+    }
+}
+
 buyBallBtn.addEventListener('click', buyDoubleBall);
+buyRadioBtn.addEventListener('click', buyRadioactivity);
 startBtn.addEventListener('click', startGame);
 
 // Init
