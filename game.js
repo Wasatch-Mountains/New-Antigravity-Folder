@@ -7,6 +7,44 @@ const overlay = document.getElementById('ui-overlay');
 const startBtn = document.getElementById('startBtn');
 const msgTitle = document.getElementById('msg-title');
 
+// Audio Setup
+let audioCtx;
+const FREQUENCIES = {
+    '#ff00ff': 261.63, // C4
+    '#00f2ff': 293.66, // D4
+    '#39ff14': 329.63, // E4
+    '#fff01f': 349.23, // F4
+    '#b026ff': 392.00, // G4
+    '#ff5a00': 440.00  // A4
+};
+
+function initAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+}
+
+function playBrickSound(color) {
+    if (!audioCtx) return;
+
+    const freq = FREQUENCIES[color] || 440;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = 'square'; // Retro synth sound
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+
+    // Envelope
+    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.1);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.1);
+}
+
 // Game Constants
 const BALL_RADIUS = 10;
 const PADDLE_HEIGHT = 15;
@@ -96,6 +134,7 @@ function collisionDetection() {
                     b.status = 0;
                     score += 10;
                     updateStats();
+                    playBrickSound(b.color);
 
                     // Check for win
                     if (checkAllBricksCleared()) {
@@ -226,6 +265,7 @@ function loop() {
 
 // State Management
 function startGame() {
+    initAudio();
     gameState = 'PLAYING';
     overlay.classList.remove('active');
     if (lives === 0) {
