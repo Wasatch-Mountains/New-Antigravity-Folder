@@ -463,6 +463,21 @@ function update() {
         ball.x += ball.dx;
         ball.y += ball.dy;
 
+        if (isRadioactive) {
+            // Spawn sparkles
+            for (let j = 0; j < 2; j++) {
+                activeParticles.push({
+                    x: ball.x,
+                    y: ball.y,
+                    dx: (Math.random() - 0.5) * 2,
+                    dy: (Math.random() - 0.5) * 2,
+                    size: Math.random() * 3 + 1,
+                    alpha: 1.0,
+                    life: 300 + Math.random() * 200
+                });
+            }
+        }
+
         // Wall collision (Left/Right)
         if (ball.x + ball.dx > canvas.width - BALL_RADIUS || ball.x + ball.dx < BALL_RADIUS) {
             ball.dx = -ball.dx;
