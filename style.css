@@ -103,6 +103,20 @@ canvas {
     text-shadow: 0 0 5px var(--neon-yellow);
 }
 
+.shop-container {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin-top: 20px;
+    padding: 10px;
+}
+
+.shop-label {
+    border: none !important;
+    font-weight: bold;
+    color: var(--neon-purple) !important;
+}
+
 .shop-btn {
     background: transparent;
     color: var(--neon-gold);

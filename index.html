@@ -16,19 +16,22 @@
         <div class="stat-box">Score: <span id="score">0000</span></div>
         <div class="stat-box">Lives: <span id="lives">3</span></div>
         <div class="stat-box">Coins: <span id="coins">0</span></div>
-        <div id="shop" class="stat-box">
-            <button id="buyBallBtn" class="shop-btn">Double Ball (10$)</button>
-            <button id="buyRadioBtn" class="shop-btn">Radioactivity (5$)</button>
-        </div>
         <div class="stat-box">Level: <span id="level">1</span></div>
     </div>
 
     <div id="game-container">
         <canvas id="gameCanvas" width="800" height="600"></canvas>
         <div id="ui-overlay" class="active">
-            <h2 id="msg-title">READY?</h2>
-            <button id="startBtn" class="btn">Start Game</button>
+            <h1 id="msg-title">NEON BREAKOUT</h1>
+            <button id="startBtn">Start Game</button>
         </div>
+    </div>
+
+    <div id="shop" class="shop-container">
+        <div class="stat-box shop-label">SHOP:</div>
+        <button id="buyBallBtn" class="shop-btn">Double Ball (10$)</button>
+        <button id="buyRadioBtn" class="shop-btn">Radioactivity (5$)</button>
+        <button id="buyRocketsBtn" class="shop-btn">Rockets (15$)</button>
     </div>
 
     <script src="game.js" defer></script>
