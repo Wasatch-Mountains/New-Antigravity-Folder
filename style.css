@@ -3,6 +3,7 @@
     --neon-blue: #00f2ff;
     --neon-green: #39ff14;
     --neon-yellow: #fff01f;
+    --neon-gold: #ffcf00;
     --neon-purple: #b026ff;
     --bg-dark: #0a0a12;
     --retro-grid: #1a1a2e;
@@ -20,7 +21,7 @@ body {
     justify-content: center;
     height: 100vh;
     overflow: hidden;
-    background-image: 
+    background-image:
         linear-gradient(var(--retro-grid) 1px, transparent 1px),
         linear-gradient(90deg, var(--retro-grid) 1px, transparent 1px);
     background-size: 40px 40px;
@@ -103,6 +104,21 @@ canvas {
 }
 
 @keyframes flicker {
-    0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% { opacity: 1; }
-    20%, 24%, 55% { opacity: 0.5; }
+
+    0%,
+    19%,
+    21%,
+    23%,
+    25%,
+    54%,
+    56%,
+    100% {
+        opacity: 1;
+    }
+
+    20%,
+    24%,
+    55% {
+        opacity: 0.5;
+    }
 }

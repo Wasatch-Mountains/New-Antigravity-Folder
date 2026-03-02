@@ -2,6 +2,7 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const scoreEl = document.getElementById('score');
 const livesEl = document.getElementById('lives');
+const coinsEl = document.getElementById('coins');
 const levelEl = document.getElementById('level');
 const overlay = document.getElementById('ui-overlay');
 const startBtn = document.getElementById('startBtn');
@@ -45,8 +46,32 @@ function playBrickSound(color) {
     osc.stop(audioCtx.currentTime + 0.1);
 }
 
+function playCoinSound() {
+    if (!audioCtx) return;
+
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = 'sine';
+    // Arpeggio effect
+    osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
+    osc.frequency.exponentialRampToValueAtTime(1046.50, audioCtx.currentTime + 0.1); // C6
+
+    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.2);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.2);
+}
+
 // Game Constants
 const BALL_RADIUS = 10;
+const COIN_RADIUS = 15;
+const COIN_SPEED = 3;
+const COMBO_WINDOW = 1000; // 1 second
 const PADDLE_HEIGHT = 15;
 const PADDLE_WIDTH = 120;
 const BRICK_ROWS = 6;
@@ -59,8 +84,12 @@ const COLORS = ['#ff00ff', '#00f2ff', '#39ff14', '#fff01f', '#b026ff', '#ff5a00'
 // Game State
 let score = 0;
 let lives = 3;
+let coins = 0;
 let level = 1;
 let gameState = 'START'; // START, PLAYING, GAME_OVER, WIN
+
+let comboTimestamps = [];
+let activeCoins = [];
 
 let ball = {
     x: canvas.width / 2,
@@ -136,12 +165,50 @@ function collisionDetection() {
                     updateStats();
                     playBrickSound(b.color);
 
+                    // Combo Detection
+                    const now = Date.now();
+                    comboTimestamps.push(now);
+                    // Only keep timestamps within the window
+                    comboTimestamps = comboTimestamps.filter(t => now - t < COMBO_WINDOW);
+
+                    if (comboTimestamps.length >= 3) {
+                        spawnCoin(brickX + bw / 2, brickY + bh / 2);
+                        comboTimestamps = []; // Reset combo after spawn
+                    }
+
                     // Check for win
                     if (checkAllBricksCleared()) {
                         handleWin();
                     }
                 }
             }
+        }
+    }
+}
+
+function spawnCoin(x, y) {
+    activeCoins.push({ x, y, dy: COIN_SPEED });
+}
+
+function updateCoins() {
+    for (let i = activeCoins.length - 1; i >= 0; i--) {
+        const c = activeCoins[i];
+        c.y += c.dy;
+
+        // Paddle collision
+        if (c.y + COIN_RADIUS > canvas.height - paddle.height - 10 &&
+            c.y - COIN_RADIUS < canvas.height - 10 &&
+            c.x > paddle.x && c.x < paddle.x + paddle.width) {
+            coins++;
+            updateStats();
+            playCoinSound();
+            activeCoins.splice(i, 1);
+            continue;
+        }
+
+        // Out of bounds
+        if (c.y > canvas.height + COIN_RADIUS) {
+            activeCoins.splice(i, 1);
         }
     }
 }
@@ -158,6 +225,7 @@ function checkAllBricksCleared() {
 function updateStats() {
     scoreEl.textContent = score.toString().padStart(4, '0');
     livesEl.textContent = lives;
+    coinsEl.textContent = coins;
     levelEl.textContent = level;
 }
 
@@ -205,6 +273,29 @@ function drawBricks() {
     }
 }
 
+function drawCoins() {
+    for (const c of activeCoins) {
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, COIN_RADIUS, 0, Math.PI * 2);
+
+        // Golden Glow
+        ctx.fillStyle = '#ffcf00';
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#ffcf00';
+        ctx.fill();
+
+        // "$" Symbol
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#000';
+        ctx.font = 'bold 16px Courier New';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('$', c.x, c.y);
+
+        ctx.closePath();
+    }
+}
+
 // Game Loop
 function update() {
     if (gameState !== 'PLAYING') return;
@@ -247,6 +338,7 @@ function update() {
         }
     }
 
+    updateCoins();
     collisionDetection();
 }
 
@@ -255,6 +347,7 @@ function draw() {
     drawBricks();
     drawBall();
     drawPaddle();
+    drawCoins();
 }
 
 function loop() {
