@@ -673,64 +673,63 @@ function update() {
             }
         }
     }
-}
 
-// Move Rockets
-for (let i = activeRockets.length - 1; i >= 0; i--) {
-    const r = activeRockets[i];
+    // Move Rockets
+    for (let i = activeRockets.length - 1; i >= 0; i--) {
+        const r = activeRockets[i];
 
-    // Find closest target
-    let target = null;
-    let minDist = Infinity;
-    for (let c = 0; c < BRICK_COLS; c++) {
-        for (let row = 0; row < BRICK_ROWS; row++) {
-            const b = bricks[c][row];
-            if (b.status === 1) {
-                const d = Math.hypot(b.x - r.x, b.y - r.y);
-                if (d < minDist) { minDist = d; target = b; }
+        // Find closest target
+        let target = null;
+        let minDist = Infinity;
+        for (let c = 0; c < BRICK_COLS; c++) {
+            for (let row = 0; row < BRICK_ROWS; row++) {
+                const b = bricks[c][row];
+                if (b.status === 1) {
+                    const d = Math.hypot(b.x - r.x, b.y - r.y);
+                    if (d < minDist) { minDist = d; target = b; }
+                }
             }
         }
-    }
 
-    if (target) {
-        let desiredAngle = Math.atan2(target.y - r.y, target.x - r.x);
-        // Erratic whimsical movement
-        r.angle += (desiredAngle - r.angle) * 0.1 + (Math.random() - 0.5) * 0.4;
-        r.x += Math.cos(r.angle) * r.speed;
-        r.y += Math.sin(r.angle) * r.speed;
+        if (target) {
+            let desiredAngle = Math.atan2(target.y - r.y, target.x - r.x);
+            // Erratic whimsical movement
+            r.angle += (desiredAngle - r.angle) * 0.1 + (Math.random() - 0.5) * 0.4;
+            r.x += Math.cos(r.angle) * r.speed;
+            r.y += Math.sin(r.angle) * r.speed;
 
-        // Target hit
-        if (minDist < 20) {
-            explodeRocket(r.x, r.y);
-            activeRockets.splice(i, 1);
+            // Target hit
+            if (minDist < 20) {
+                explodeRocket(r.x, r.y);
+                activeRockets.splice(i, 1);
+            }
+        } else {
+            // No bricks left, fly away
+            r.y -= r.speed;
+            if (r.y < 0) activeRockets.splice(i, 1);
         }
-    } else {
-        // No bricks left, fly away
-        r.y -= r.speed;
-        if (r.y < 0) activeRockets.splice(i, 1);
     }
-}
 
-// Update particles
-for (let i = activeParticles.length - 1; i >= 0; i--) {
-    const p = activeParticles[i];
-    p.x += p.dx;
-    p.y += p.dy;
-    p.life -= 16.67;
-    p.alpha = p.life / 500;
-    if (p.life <= 0) activeParticles.splice(i, 1);
-}
+    // Update particles
+    for (let i = activeParticles.length - 1; i >= 0; i--) {
+        const p = activeParticles[i];
+        p.x += p.dx;
+        p.y += p.dy;
+        p.life -= 16.67;
+        p.alpha = p.life / 500;
+        if (p.life <= 0) activeParticles.splice(i, 1);
+    }
 
-// Update fading bricks
-for (let i = fadingBricks.length - 1; i >= 0; i--) {
-    const fb = fadingBricks[i];
-    fb.life -= 16.67;
-    fb.alpha = fb.life / 500;
-    if (fb.life <= 0) fadingBricks.splice(i, 1);
-}
+    // Update fading bricks
+    for (let i = fadingBricks.length - 1; i >= 0; i--) {
+        const fb = fadingBricks[i];
+        fb.life -= 16.67;
+        fb.alpha = fb.life / 500;
+        if (fb.life <= 0) fadingBricks.splice(i, 1);
+    }
 
-updateCoins();
-collisionDetection();
+    updateCoins();
+    collisionDetection();
 }
 
 function draw() {
