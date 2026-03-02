@@ -220,6 +220,8 @@ let activeCoins = [];
 let balls = [];
 let radioactiveTimer = 0;
 let isRadioactive = false;
+let activeParticles = [];
+let fadingBricks = [];
 let sparkleTimer = 0;
 let hasRockets = 0; // Number of launches available
 let activeRockets = [];
@@ -398,10 +400,16 @@ function destroyNeighbors(c, r) {
         [c - 1, r], [c + 1, r], [c, r - 1], [c, r + 1]
     ];
 
+    const bw = (canvas.width - BRICK_OFFSET_LEFT * 2) / BRICK_COLS - BRICK_PADDING;
+    const bh = PADDLE_HEIGHT;
+
     neighbors.forEach(([nc, nr]) => {
         if (nc >= 0 && nc < BRICK_COLS && nr >= 0 && nr < BRICK_ROWS) {
             const nb = bricks[nc][nr];
             if (nb.status === 1) {
+                const bx = nc * (canvas.width - BRICK_OFFSET_LEFT * 2) / BRICK_COLS + BRICK_OFFSET_LEFT;
+                const by = nr * (PADDLE_HEIGHT + BRICK_PADDING) + BRICK_OFFSET_TOP;
+
                 nb.hits--;
                 if (nb.hits <= 0) {
                     nb.status = 0;
