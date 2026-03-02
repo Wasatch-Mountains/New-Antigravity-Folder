@@ -220,19 +220,20 @@ let activeCoins = [];
 let balls = [];
 let radioactiveTimer = 0;
 let isRadioactive = false;
-let activeParticles = [];
-let fadingBricks = [];
 let sparkleTimer = 0;
 let hasRockets = 0; // Number of launches available
 let activeRockets = [];
+let steelComboTimestamps = [];
+const STEEL_COMBO_WINDOW = 4000; // 4 seconds
 
-function createBall(x, y, dx, dy) {
+function createBall(x, y, dx, dy, docked = false) {
     return {
         x: x || canvas.width / 2,
         y: y || canvas.height - 30,
-        dx: dx || 4,
-        dy: dy || -4,
-        color: '#fff'
+        dx: dx || 0,
+        dy: dy || 0,
+        color: '#fff',
+        docked: docked
     };
 }
 
@@ -251,13 +252,18 @@ function initBricks() {
     for (let c = 0; c < BRICK_COLS; c++) {
         bricks[c] = [];
         for (let r = 0; r < BRICK_ROWS; r++) {
+            const isSteel = r < 1; // Back row
             bricks[c][r] = {
                 x: 0,
                 y: 0,
                 status: 1,
-                color: COLORS[r % COLORS.length],
-                rotation: 0 // In radians
+                color: isSteel ? '#888' : COLORS[r % COLORS.length],
+                rotation: 0, // In radians
+                type: isSteel ? 'steel' : 'normal',
+                hits: isSteel ? (Math.random() < 0.5 ? 2 : 3) : 1,
+                maxHits: isSteel ? 0 : 1 // 0 means it hasn't been hit yet for steel calculation
             };
+            if (isSteel) bricks[c][r].maxHits = bricks[c][r].hits;
         }
     }
 }
@@ -266,7 +272,10 @@ function initBricks() {
 document.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowRight' || e.key === 'Right') paddle.isMovingRight = true;
     if (e.key === 'ArrowLeft' || e.key === 'Left') paddle.isMovingLeft = true;
-    if (e.key === ' ' && hasRockets > 0 && gameState === 'PLAYING') launchRockets();
+    if (e.key === ' ' && gameState === 'PLAYING') {
+        if (hasRockets > 0) launchRockets();
+        releaseBalls();
+    }
 });
 
 document.addEventListener('keyup', (e) => {
@@ -283,7 +292,10 @@ canvas.addEventListener('mousemove', (e) => {
 });
 
 canvas.addEventListener('mousedown', (e) => {
-    if (hasRockets > 0 && gameState === 'PLAYING') launchRockets();
+    if (gameState === 'PLAYING') {
+        if (hasRockets > 0) launchRockets();
+        releaseBalls();
+    }
 });
 
 // Collision Detection
@@ -333,12 +345,29 @@ function collisionDetection() {
                         ball.dx -= 2 * dot * realNormalX;
                         ball.dy -= 2 * dot * realNormalY;
 
-                        b.status = 0;
-                        score += 10;
-                        updateStats();
-                        playBrickSound(b.color);
+                        b.hits--;
+                        if (b.hits <= 0) {
+                            b.status = 0;
+                            score += (b.type === 'steel' ? 50 : 10);
+                            playBrickSound(b.color);
 
-                        if (isRadioactive) {
+                            if (b.type === 'steel') {
+                                // Steel combo detection
+                                const now = Date.now();
+                                steelComboTimestamps.push(now);
+                                steelComboTimestamps = steelComboTimestamps.filter(t => now - t < STEEL_COMBO_WINDOW);
+                                if (steelComboTimestamps.length >= 2) {
+                                    spawnCoin(b.x + bw / 2, b.y + bh / 2, 'platinum');
+                                    steelComboTimestamps = [];
+                                }
+                            }
+                        } else {
+                            playPaddleSound(); // Temporary sound for hit
+                        }
+
+                        updateStats();
+
+                        if (isRadioactive && b.status === 0) {
                             destroyNeighbors(c, r);
                         }
 
@@ -373,17 +402,14 @@ function destroyNeighbors(c, r) {
         if (nc >= 0 && nc < BRICK_COLS && nr >= 0 && nr < BRICK_ROWS) {
             const nb = bricks[nc][nr];
             if (nb.status === 1) {
-                nb.status = 0;
-                score += 5; // Reduced score for neighbors
+                nb.hits--;
+                if (nb.hits <= 0) {
+                    nb.status = 0;
+                    score += 5;
 
-                const bw = (canvas.width - BRICK_OFFSET_LEFT * 2) / BRICK_COLS - BRICK_PADDING;
-                const bh = PADDLE_HEIGHT;
-                const bx = nc * (bw + BRICK_PADDING) + BRICK_OFFSET_LEFT;
-                const by = nr * (bh + BRICK_PADDING) + BRICK_OFFSET_TOP;
-
-                // 25% chance for radioactive coin
-                if (Math.random() < 0.25) {
-                    spawnCoin(bx + bw / 2, by + bh / 2, 'radioactive');
+                    if (Math.random() < 0.25) {
+                        spawnCoin(bx + bw / 2, by + bh / 2, 'radioactive');
+                    }
                 }
 
                 // Add to fading bricks
@@ -413,7 +439,10 @@ function updateCoins() {
 
             if (c.type === 'radioactive') {
                 coins += 3;
-                playSparkleSound(); // Twice the fun or different sound
+                playSparkleSound();
+            } else if (c.type === 'platinum') {
+                coins += 10;
+                playRadioactiveSound(); // Big sound for big reward
             } else {
                 coins++;
             }
@@ -447,9 +476,9 @@ function updateStats() {
     levelEl.textContent = level;
 
     // Shop Logic
-    buyBallBtn.disabled = coins < 10;
-    buyRadioBtn.disabled = coins < 5 || isRadioactive;
-    buyRocketsBtn.disabled = coins < 15;
+    buyBallBtn.disabled = coins < 3;
+    buyRadioBtn.disabled = coins < 7 || isRadioactive;
+    buyRocketsBtn.disabled = coins < 5;
 }
 
 // Drawing Functions
@@ -504,9 +533,45 @@ function drawBricks() {
                 ctx.rotate(b.rotation);
                 ctx.beginPath();
                 ctx.rect(-bw / 2, -bh / 2, bw, bh);
-                ctx.fillStyle = b.color;
-                ctx.shadowBlur = 8;
-                ctx.shadowColor = b.color;
+
+                if (b.type === 'steel') {
+                    // Metallic gradient
+                    const grad = ctx.createLinearGradient(-bw / 2, -bh / 2, bw / 2, bh / 2);
+                    grad.addColorStop(0, '#555');
+                    grad.addColorStop(0.5, '#AAA');
+                    grad.addColorStop(1, '#555');
+                    ctx.fillStyle = grad;
+                    ctx.strokeStyle = '#333';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(-bw / 2, -bh / 2, bw, bh);
+
+                    // Bolted look
+                    ctx.fillStyle = '#333';
+                    const boltSize = 2;
+                    ctx.fillRect(-bw / 2 + 2, -bh / 2 + 2, boltSize, boltSize);
+                    ctx.fillRect(bw / 2 - 4, -bh / 2 + 2, boltSize, boltSize);
+                    ctx.fillRect(-bw / 2 + 2, bh / 2 - 4, boltSize, boltSize);
+                    ctx.fillRect(bw / 2 - 4, bh / 2 - 4, boltSize, boltSize);
+
+                    // Cracks
+                    if (b.hits < b.maxHits) {
+                        ctx.strokeStyle = '#222';
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        ctx.moveTo(0, 0);
+                        ctx.lineTo(10, 5);
+                        if (b.hits === 1) {
+                            ctx.moveTo(0, 0);
+                            ctx.lineTo(-10, -5);
+                        }
+                        ctx.stroke();
+                    }
+                } else {
+                    ctx.fillStyle = b.color;
+                    ctx.shadowBlur = 8;
+                    ctx.shadowColor = b.color;
+                }
+
                 ctx.fill();
                 ctx.closePath();
                 ctx.shadowBlur = 0;
@@ -522,26 +587,30 @@ function drawCoins() {
         ctx.arc(c.x, c.y, COIN_RADIUS, 0, Math.PI * 2);
 
         const isRadio = c.type === 'radioactive';
-        const color = isRadio ? '#39ff14' : '#ffcf00';
+        const isPlatinum = c.type === 'platinum';
+        const color = isPlatinum ? '#E5E4E2' : (isRadio ? '#39ff14' : '#ffcf00');
 
         // Glow
         ctx.fillStyle = color;
-        ctx.shadowBlur = 15;
+        ctx.shadowBlur = 20;
         ctx.shadowColor = color;
         ctx.fill();
 
         // Symbol
         ctx.shadowBlur = 0;
         ctx.fillStyle = '#000';
-        ctx.font = 'bold 14px Courier New'; // Slightly smaller to fit €3
+        ctx.font = 'bold 12px Courier New';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(isRadio ? '€3' : '$', c.x, c.y);
+        let symbol = '$';
+        if (isRadio) symbol = '€3';
+        if (isPlatinum) symbol = '€10';
+        ctx.fillText(symbol, c.x, c.y);
 
         ctx.closePath();
 
-        if (isRadio && Math.random() < 0.1) {
-            spawnParticles(c.x, c.y, '#39ff14', 1);
+        if ((isRadio || isPlatinum) && Math.random() < 0.1) {
+            spawnParticles(c.x, c.y, color, 1);
         }
     }
 }
@@ -632,6 +701,13 @@ function update() {
     // Move balls
     for (let i = balls.length - 1; i >= 0; i--) {
         const ball = balls[i];
+
+        if (ball.docked) {
+            ball.x = paddle.x + paddle.width / 2;
+            ball.y = canvas.height - paddle.height - 25;
+            continue;
+        }
+
         ball.x += ball.dx;
         ball.y += ball.dy;
 
@@ -809,35 +885,50 @@ function handleWin() {
 }
 
 function resetBall() {
-    balls = [createBall()];
+    balls = [createBall(null, null, null, null, true)];
     paddle.x = (canvas.width - paddle.width) / 2;
     activeCoins = [];
     comboTimestamps = [];
+    steelComboTimestamps = [];
+}
+
+function releaseBalls() {
+    balls.forEach(ball => {
+        if (ball.docked) {
+            ball.docked = false;
+            // Launch in direction based on paddle position
+            const angle = -Math.PI / 2 + (Math.random() - 0.5) * 0.5;
+            const speed = 5;
+            ball.dx = Math.cos(angle) * speed;
+            ball.dy = Math.sin(angle) * speed;
+        }
+    });
 }
 
 function buyDoubleBall() {
-    if (coins >= 10) {
-        coins -= 10;
+    if (coins >= 3) {
+        coins -= 3;
         updateStats();
 
         const currentBalls = [...balls];
         currentBalls.forEach(b => {
+            if (b.docked) return;
             // Create a new ball at the same position but with a different angle
             const angle = Math.atan2(b.dy, b.dx) + (Math.random() * 0.4 - 0.2);
-            const speed = Math.sqrt(b.dx * b.dx + b.dy * b.dy);
+            const speed = Math.sqrt(b.dx * b.dx + b.dy * b.dy) || 5;
             const newDx = Math.cos(angle) * speed;
             const newDy = Math.sin(angle) * speed;
 
             balls.push(createBall(b.x, b.y, newDx, newDy));
         });
 
-        playCoinSound(); // Re-use coin sound for purchase
+        playCoinSound();
     }
 }
 
 function buyRadioactivity() {
-    if (coins >= 5 && !isRadioactive) {
-        coins -= 5;
+    if (coins >= 7 && !isRadioactive) {
+        coins -= 7;
         isRadioactive = true;
         radioactiveTimer = 10000;
         updateStats();
@@ -846,8 +937,8 @@ function buyRadioactivity() {
 }
 
 function buyRockets() {
-    if (coins >= 15) {
-        coins -= 15;
+    if (coins >= 5) {
+        coins -= 5;
         hasRockets++;
         updateStats();
         playCoinSound();
