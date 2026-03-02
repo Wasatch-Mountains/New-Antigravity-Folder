@@ -138,6 +138,26 @@ function playSparkleSound() {
     osc.stop(audioCtx.currentTime + 0.05);
 }
 
+function playDeathSound() {
+    if (!audioCtx) return;
+
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.6);
+
+    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+    gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.6);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.6);
+}
+
 // Game Constants
 const BALL_RADIUS = 10;
 const COIN_RADIUS = 15;
@@ -283,12 +303,17 @@ function destroyNeighbors(c, r) {
                 nb.status = 0;
                 score += 5; // Reduced score for neighbors
 
-                // Add to fading bricks
                 const bw = (canvas.width - BRICK_OFFSET_LEFT * 2) / BRICK_COLS - BRICK_PADDING;
                 const bh = PADDLE_HEIGHT;
                 const bx = nc * (bw + BRICK_PADDING) + BRICK_OFFSET_LEFT;
                 const by = nr * (bh + BRICK_PADDING) + BRICK_OFFSET_TOP;
 
+                // 25% chance for radioactive coin
+                if (Math.random() < 0.25) {
+                    spawnCoin(bx + bw / 2, by + bh / 2, 'radioactive');
+                }
+
+                // Add to fading bricks
                 fadingBricks.push({
                     x: bx, y: by, w: bw, h: bh,
                     alpha: 1.0,
@@ -299,8 +324,8 @@ function destroyNeighbors(c, r) {
     });
 }
 
-function spawnCoin(x, y) {
-    activeCoins.push({ x, y, dy: COIN_SPEED });
+function spawnCoin(x, y, type = 'normal') {
+    activeCoins.push({ x, y, dy: COIN_SPEED, type });
 }
 
 function updateCoins() {
@@ -312,7 +337,14 @@ function updateCoins() {
         if (c.y + COIN_RADIUS > canvas.height - paddle.height - 10 &&
             c.y - COIN_RADIUS < canvas.height - 10 &&
             c.x > paddle.x && c.x < paddle.x + paddle.width) {
-            coins++;
+
+            if (c.type === 'radioactive') {
+                coins += 3;
+                playSparkleSound(); // Twice the fun or different sound
+            } else {
+                coins++;
+            }
+
             updateStats();
             playCoinSound();
             activeCoins.splice(i, 1);
@@ -411,21 +443,36 @@ function drawCoins() {
         ctx.beginPath();
         ctx.arc(c.x, c.y, COIN_RADIUS, 0, Math.PI * 2);
 
-        // Golden Glow
-        ctx.fillStyle = '#ffcf00';
+        const isRadio = c.type === 'radioactive';
+        const color = isRadio ? '#39ff14' : '#ffcf00';
+
+        // Glow
+        ctx.fillStyle = color;
         ctx.shadowBlur = 15;
-        ctx.shadowColor = '#ffcf00';
+        ctx.shadowColor = color;
         ctx.fill();
 
-        // "$" Symbol
+        // Symbol
         ctx.shadowBlur = 0;
         ctx.fillStyle = '#000';
-        ctx.font = 'bold 16px Courier New';
+        ctx.font = 'bold 14px Courier New'; // Slightly smaller to fit €3
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('$', c.x, c.y);
+        ctx.fillText(isRadio ? '€3' : '$', c.x, c.y);
 
         ctx.closePath();
+
+        if (isRadio && Math.random() < 0.1) {
+            activeParticles.push({
+                x: c.x + (Math.random() - 0.5) * 20,
+                y: c.y + (Math.random() - 0.5) * 20,
+                dx: (Math.random() - 0.5),
+                dy: (Math.random() - 0.5),
+                size: Math.random() * 2 + 1,
+                alpha: 1.0,
+                life: 200 + Math.random() * 200
+            });
+        }
     }
 }
 
@@ -500,6 +547,7 @@ function update() {
 
                 if (balls.length === 0) {
                     lives--;
+                    playDeathSound();
                     updateStats();
                     if (!lives) {
                         handleGameOver();
