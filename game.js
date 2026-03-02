@@ -853,7 +853,11 @@ function startGame() {
     initAudio();
     gameState = 'PLAYING';
     overlay.classList.remove('active');
-    if (lives === 0) {
+
+    // Always reset ball to docked state at start
+    resetBall();
+
+    if (lives === 0 || level === 1) {
         score = 0;
         lives = 3;
         level = 1;
